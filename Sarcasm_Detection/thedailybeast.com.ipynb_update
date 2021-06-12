@@ -1,0 +1,456 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Untitled4.ipynb",
+      "provenance": [],
+      "collapsed_sections": [],
+      "toc_visible": true,
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/hoangquan1105/Crawl/blob/master/Sarcasm_Detection/thedailybeast.com.ipynb_update\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "VPJYxloz9Lrs"
+      },
+      "source": [
+        "# **Code**"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "kGIMSTZX9Qj2"
+      },
+      "source": [
+        "## **Thêm thư viện**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "KAKmDhyl9ZvM"
+      },
+      "source": [
+        "import requests\n",
+        "import lxml\n",
+        "from bs4 import BeautifulSoup\n",
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "import csv\n"
+      ],
+      "execution_count": 65,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "W2nS1AqP9d2m"
+      },
+      "source": [
+        "### **Format Dataset**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "wFbDrFp29dTb"
+      },
+      "source": [
+        "is_sarcastic=[] # 0 or 1\n",
+        "headline=[] #headline\n",
+        "article_link=[]  #url"
+      ],
+      "execution_count": 66,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "R5lJkl0M9hW5"
+      },
+      "source": [
+        "## **Hàm requests tới website**"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "9IZZ11oo9l72"
+      },
+      "source": [
+        "### Mô phỏng thông tin tiêu đề của trình duyệt để tránh bị chặn khi gửi yêu cầu tới trang web nhiều lần."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "VHqM2p5Y9i1Q"
+      },
+      "source": [
+        "def requests_to_website(url):\n",
+        "  headers = {\n",
+        "    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE'\n",
+        "  }\n",
+        "  return requests.get(url, headers = headers)\n",
+        "  \n"
+      ],
+      "execution_count": 67,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "LVEIXiqjKfJk"
+      },
+      "source": [
+        "\n",
+        "def parser_website(r):\n",
+        "  #tạo một đối tượng BeautifulSoup và chỉ định trình phân tích cú pháp là lxml\n",
+        "  return BeautifulSoup(r.content,'lxml')"
+      ],
+      "execution_count": 68,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "QF20tn1-90eZ"
+      },
+      "source": [
+        "## **Hàm lấy các thẻ**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "16S3BFRe93Lt"
+      },
+      "source": [
+        "def get_tag(r):\n",
+        "  return parser_website(r).find('div',class_=\"SitemapMonthPage__articles-wrapper\").find_all('a')"
+      ],
+      "execution_count": 69,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Y1RPn_HV951r"
+      },
+      "source": [
+        "## **Hàm kiểm tra năm**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "I0kzVTtj98SW"
+      },
+      "source": [
+        "def check_year(year,tag):\n",
+        "  t=tag.find('time',class_='time')['datetime'][:11]\n",
+        "  t=int(t[:4])\n",
+        "  if t<year-2:    # lấy giá trị datetime trong thẻ time và có class='entry-data'. sau đó lấy 4 kí tự đầu và chuyển về kiểu int thì được năm đăng bài viết\n",
+        "    return False\n",
+        "  return True"
+      ],
+      "execution_count": 70,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "0ZT-O-4i9900"
+      },
+      "source": [
+        "## **Hàm trích xuất các dữ liệu cần thiết**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "V1kP3M669_dw"
+      },
+      "source": [
+        "def extract_data(hl,link,kind,r):\n",
+        "  tag=get_tag(r)\n",
+        "  for i in tag:\n",
+        "    link.append(i['href']) # lấy url thêm vào mảng\n",
+        "    hl.append(i.get_text().strip('\\n')) # lọc tiêu đề\n",
+        "    kind.append(0) # gán nhãn\n",
+        "\n",
+        "    "
+      ],
+      "execution_count": 71,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "08tqPvZ5-BIR"
+      },
+      "source": [
+        "## **Hàm ghi file**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "_X4ICbd0-CM6"
+      },
+      "source": [
+        "import pandas as pd\n",
+        "import json\n",
+        "def Write_file(hl,link,kind,fileName):\n",
+        "  with open(fileName,'w',encoding ='utf8') as outfile:\n",
+        "    for i in range(len(hl)):\n",
+        "      root={\"article_link\":link[i],\"headline\":hl[i],\"is_sarcastic\":kind[i]}\n",
+        "      json.dump(root, outfile)\n",
+        "      outfile.writelines('\\n')\n"
+      ],
+      "execution_count": 72,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "XxZdV3Ti-DsA"
+      },
+      "source": [
+        "## Main"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "V1WUFvc8TwNj"
+      },
+      "source": [
+        "month=['12','11','10','9','8','7','6','5','4','3','2','1']\n",
+        "year=['2021','2020','2019']\n"
+      ],
+      "execution_count": 73,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ztMRbAK8VRQk",
+        "outputId": "64c39ea6-b239-496b-fbb7-e8a9421b6019"
+      },
+      "source": [
+        "for y in year:\n",
+        "  for m in month:\n",
+        "      n=1\n",
+        "      url='https://www.thedailybeast.com/sitemap/{}/{}/article'.format(y,m)\n",
+        "      if n>1:\n",
+        "        url=url+str(n)\n",
+        "      n=n+1\n",
+        "      r=requests_to_website(url)\n",
+        "      print('\\n',url)\n",
+        "      print('\\t',r.status_code)\n",
+        "      if r.status_code==404:\n",
+        "        break\n",
+        "      extract_data(headline,article_link,is_sarcastic,r)"
+      ],
+      "execution_count": 74,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/12/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/11/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/10/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/9/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/8/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/7/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/6/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/5/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/4/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/3/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/2/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2021/1/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/12/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/11/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/10/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/9/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/8/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/7/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/6/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/5/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/4/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/3/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/2/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2020/1/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/12/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/11/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/10/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/9/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/8/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/7/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/6/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/5/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/4/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/3/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/2/article\n",
+            "\t 200\n",
+            "\n",
+            " https://www.thedailybeast.com/sitemap/2019/1/article\n",
+            "\t 200\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Agbg9XLsYGoq",
+        "outputId": "e783fc1e-5e26-4416-996f-3a9b7e8ebed8"
+      },
+      "source": [
+        "len(article_link)"
+      ],
+      "execution_count": 75,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "25503"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 75
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "LzkgwaKglVWw"
+      },
+      "source": [
+        "import pandas as pd\n",
+        "import json\n",
+        "def Write_file(hl,link,kind,fileName):\n",
+        "  with open(fileName,'w',encoding ='utf8') as outfile:\n",
+        "    for i in range(len(hl)):\n",
+        "      root={\"article_link\":link[i],\"headline\":hl[i],\"is_sarcastic\":kind[i]}\n",
+        "      json.dump(root, outfile)\n",
+        "      outfile.writelines('\\n')"
+      ],
+      "execution_count": 76,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "lNlSHcX1lGEn"
+      },
+      "source": [
+        "Write_file(headline,article_link,is_sarcastic,'thedailybeast.com.json')"
+      ],
+      "execution_count": 77,
+      "outputs": []
+    }
+  ]
+}
